@@ -13,7 +13,7 @@ setup(
         'librosa',
         'torch',
     ],
-    data_files=[
-        ('hihobot_synthesis', ['hihobot_synthesis/questions_jp.hed']),
-    ]
+    package_data={
+        '': ['questions_jp.hed'],
+    }
 )
