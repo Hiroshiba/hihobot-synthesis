@@ -51,7 +51,10 @@ class Synthesizer(object):
             config.num_hidden_layers["duration"],
             bidirectional=True,
         )
-        self.duration_model.load_state_dict(torch.load(duration_model_path))
+        if _use_cuda:
+            self.duration_model.load_state_dict(torch.load(duration_model_path))
+        else:
+            self.duration_model.load_state_dict(torch.load(duration_model_path, map_location = 'cpu'))
 
         self.acoustic_model = MyRNN(
             config.X_channel["acoustic"],
@@ -60,7 +63,10 @@ class Synthesizer(object):
             config.num_hidden_layers["acoustic"],
             bidirectional=True,
         )
-        self.acoustic_model.load_state_dict(torch.load(acoustic_model_path))
+        if _use_cuda:
+            self.acoustic_model.load_state_dict(torch.load(acoustic_model_path))
+        else:
+            self.acoustic_model.load_state_dict(torch.load(acoustic_model_path, map_location = 'cpu'))
 
         self.config = config
 
