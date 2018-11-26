@@ -16,7 +16,7 @@ from torch.autograd import Variable
 from hihobot_synthesis.config import Config
 from hihobot_synthesis.wave import Wave
 
-_use_cuda = torch.cuda.is_available()
+_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _binary_dict, _continuous_dict = hts.load_question_set(Path(__file__).parent / "questions_jp.hed")
 
 
@@ -30,8 +30,8 @@ class MyRNN(nn.Module):
         self.hidden2out = nn.Linear(self.num_direction * self.hidden_dim, D_out)
 
     def init_hidden(self, batch_size):
-        h, c = (Variable(torch.zeros(self.num_layers * self.num_direction, batch_size, self.hidden_dim)),
-                Variable(torch.zeros(self.num_layers * self.num_direction, batch_size, self.hidden_dim)))
+        h, c = (Variable(torch.zeros(self.num_layers * self.num_direction, batch_size, self.hidden_dim).to(_device)),
+                Variable(torch.zeros(self.num_layers * self.num_direction, batch_size, self.hidden_dim).to(_device)))
         return h, c
 
     def forward(self, sequence, lengths, h, c):
@@ -51,10 +51,9 @@ class Synthesizer(object):
             config.num_hidden_layers["duration"],
             bidirectional=True,
         )
-        if _use_cuda:
-            self.duration_model.load_state_dict(torch.load(duration_model_path))
-        else:
-            self.duration_model.load_state_dict(torch.load(duration_model_path, map_location = 'cpu'))
+        self.duration_model.load_state_dict(torch.load(duration_model_path))
+        self.duration_model.to(_device)
+        self.duration_model.eval()
 
         self.acoustic_model = MyRNN(
             config.X_channel["acoustic"],
@@ -63,10 +62,9 @@ class Synthesizer(object):
             config.num_hidden_layers["acoustic"],
             bidirectional=True,
         )
-        if _use_cuda:
-            self.acoustic_model.load_state_dict(torch.load(acoustic_model_path))
-        else:
-            self.acoustic_model.load_state_dict(torch.load(acoustic_model_path, map_location = 'cpu'))
+        self.acoustic_model.load_state_dict(torch.load(acoustic_model_path))
+        self.acoustic_model.to(_device)
+        self.acoustic_model.eval()
 
         self.config = config
 
@@ -135,19 +133,15 @@ class Synthesizer(object):
             feature_range=(0.01, 0.99),
         )
 
-        # Apply models
-        duration_model = duration_model.cpu()
-        duration_model.eval()
-
         #  Apply model
-        x = Variable(torch.from_numpy(duration_linguistic_features)).float()
+        x = Variable(torch.from_numpy(duration_linguistic_features).to(_device)).float()
         try:
-            duration_predicted = duration_model(x).data.numpy()
+            duration_predicted = duration_model(x).cpu().data.numpy()
         except:
             h, c = duration_model.init_hidden(batch_size=1)
             xl = len(x)
             x = x.view(1, -1, x.size(-1))
-            duration_predicted = duration_model(x, [xl], h, c).data.numpy()
+            duration_predicted = duration_model(x, [xl], h, c).cpu().data.numpy()
             duration_predicted = duration_predicted.reshape(-1, duration_predicted.shape[-1])
 
         # Apply denormalization
@@ -189,16 +183,14 @@ class Synthesizer(object):
         )
 
         # Predict acoustic features
-        acoustic_model = acoustic_model.cpu()
-        acoustic_model.eval()
-        x = Variable(torch.from_numpy(linguistic_features)).float()
+        x = Variable(torch.from_numpy(linguistic_features).to(_device)).float()
         try:
-            acoustic_predicted = acoustic_model(x).data.numpy()
+            acoustic_predicted = acoustic_model(x).cpu().data.numpy()
         except:
             h, c = acoustic_model.init_hidden(batch_size=1)
             xl = len(x)
             x = x.view(1, -1, x.size(-1))
-            acoustic_predicted = acoustic_model(x, [xl], h, c).data.numpy()
+            acoustic_predicted = acoustic_model(x, [xl], h, c).cpu().data.numpy()
             acoustic_predicted = acoustic_predicted.reshape(-1, acoustic_predicted.shape[-1])
 
         # Apply denormalization

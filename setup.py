@@ -11,7 +11,6 @@ setup(
         'nnmnkwii',
         'pyworld',
         'librosa',
-        'torch',
     ],
     package_data={
         '': ['questions_jp.hed'],
