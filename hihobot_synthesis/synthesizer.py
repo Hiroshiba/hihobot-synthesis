@@ -16,7 +16,8 @@ from torch.autograd import Variable
 from hihobot_synthesis.config import Config
 from hihobot_synthesis.wave import Wave
 
-_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+_use_cuda = torch.cuda.is_available()
+_device = torch.device("cuda" if _use_cuda else "cpu")
 _binary_dict, _continuous_dict = hts.load_question_set(Path(__file__).parent / "questions_jp.hed")
 
 
@@ -51,7 +52,10 @@ class Synthesizer(object):
             config.num_hidden_layers["duration"],
             bidirectional=True,
         )
-        self.duration_model.load_state_dict(torch.load(duration_model_path))
+        if _use_cuda:
+            self.duration_model.load_state_dict(torch.load(duration_model_path))
+        else:
+            self.duration_model.load_state_dict(torch.load(duration_model_path, map_location='cpu'))
         self.duration_model.to(_device)
         self.duration_model.eval()
 
@@ -62,7 +66,10 @@ class Synthesizer(object):
             config.num_hidden_layers["acoustic"],
             bidirectional=True,
         )
-        self.acoustic_model.load_state_dict(torch.load(acoustic_model_path))
+        if _use_cuda:
+            self.acoustic_model.load_state_dict(torch.load(acoustic_model_path))
+        else:
+            self.acoustic_model.load_state_dict(torch.load(acoustic_model_path, map_location = 'cpu'))
         self.acoustic_model.to(_device)
         self.acoustic_model.eval()
 
@@ -101,8 +108,12 @@ class Synthesizer(object):
         spectrogram = pysptk.mc2sp(mgc, fftlen=self.config.fftlen, alpha=self.config.alpha)
         aperiodicity = pyworld.decode_aperiodicity(bap.astype(np.float64), self.config.fs, self.config.fftlen)
         f0 = lf0.copy()
-        f0[vuv < 0.5] = 0
         f0[np.nonzero(f0)] = np.exp(f0[np.nonzero(f0)])
+
+        if self.config.lowest_frequency is not None:
+            f0[f0 < self.config.lowest_frequency] = self.config.lowest_frequency
+
+        f0[vuv < 0.5] = 0
 
         generated_waveform = pyworld.synthesize(
             f0.flatten().astype(np.float64),
@@ -111,7 +122,8 @@ class Synthesizer(object):
             self.config.fs,
             self.config.frame_period,
         )
-        return generated_waveform
+        wave = generated_waveform.astype(np.float32) / 2 ** 15
+        return Wave(wave=wave, sampling_rate=self.config.fs)
 
     def gen_duration(self, hts_labels):
         duration_model = self.duration_model
@@ -154,7 +166,7 @@ class Synthesizer(object):
 
         return hts_labels
 
-    def test_one_utt(self, hts_labels, post_filter=True):
+    def gen_acoustic_feature(self, hts_labels):
         acoustic_model = self.acoustic_model
 
         # Predict durations
@@ -195,7 +207,10 @@ class Synthesizer(object):
 
         # Apply denormalization
         acoustic_predicted = acoustic_predicted * self.config.Y_scale[ty] + self.config.Y_mean[ty]
+        return acoustic_predicted
 
-        wave = self.gen_waveform(acoustic_predicted, post_filter)
-        wave = wave.astype(np.float32) / 2 ** 15
-        return Wave(wave=wave, sampling_rate=self.config.fs)
+    def test_one_utt(self, hts_labels, post_filter=True):
+        acoustic_predicted = self.gen_acoustic_feature(
+            hts_labels=hts_labels,
+        )
+        return self.gen_waveform(acoustic_predicted, post_filter)

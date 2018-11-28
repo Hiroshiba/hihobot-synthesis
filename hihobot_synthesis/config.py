@@ -1,11 +1,13 @@
 import json
 from pathlib import Path
-from typing import Tuple, List, Dict, NamedTuple
+from typing import Tuple, List, Dict, NamedTuple, Optional
 
 import numpy as np
 
 
 class Config(NamedTuple):
+    lowest_frequency: Optional[float]
+
     mgc_dim: int
     lf0_dim: int
     vuv_dim: int
@@ -54,6 +56,8 @@ class Config(NamedTuple):
 def load_from_json(p: Path):
     d = json.load(p.open())
     return Config(
+        lowest_frequency=d['lowest_frequency'],
+
         mgc_dim=d['mgc_dim'],
         lf0_dim=d['lf0_dim'],
         vuv_dim=d['vuv_dim'],
