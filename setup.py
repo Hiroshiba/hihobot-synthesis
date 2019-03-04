@@ -10,7 +10,8 @@ setup(
     install_requires=[
         'nnmnkwii',
         'pyworld',
-        'librosa',
+        'librosa<0.7.0',
+        'torch<1.1.0',
     ],
     package_data={
         '': ['questions_jp.hed'],

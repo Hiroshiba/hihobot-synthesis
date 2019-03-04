@@ -69,7 +69,7 @@ class Synthesizer(object):
         if _use_cuda:
             self.acoustic_model.load_state_dict(torch.load(acoustic_model_path))
         else:
-            self.acoustic_model.load_state_dict(torch.load(acoustic_model_path, map_location = 'cpu'))
+            self.acoustic_model.load_state_dict(torch.load(acoustic_model_path, map_location='cpu'))
         self.acoustic_model.to(_device)
         self.acoustic_model.eval()
 
